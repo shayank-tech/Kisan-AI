@@ -1,5 +1,3 @@
-# Kisan AI
-application for farmers
 const ComponentFunction = function() {
 // @section:imports @depends:[]
 const React = require('react');
@@ -99,6 +97,13 @@ var STATUS_LABELS = {
   quality_verified: 'Quality Verified',
   weighing: 'Weighing in Progress',
   completed: 'Procurement Completed'
+};
+var BANK_DETAILS = {
+  accountName: 'Kisan Procurement Authority',
+  accountNumber: '9876543210',
+  ifscCode: 'KISAN0001',
+  bankName: 'State Agricultural Bank',
+  branchName: 'Bangalore Main Branch'
 };
 function loadColor(pct) {
   if (pct >= 85) return '#DC2626';
@@ -848,6 +853,85 @@ var TrackTokenScreen = function(props) {
 };
 // @end:TrackTokenScreen
 
+// @section:PaymentScreen @depends:[ThemeContext,styles]
+var PaymentScreen = function(props) {
+  var themeCtx = useTheme();
+  var theme = themeCtx.theme;
+  var insets = useSafeAreaInsets();
+  var { data: transactions, loading, refetch } = useQuery('transactions', {}, { column: 'created_at', ascending: false });
+  var { mutate: updateTransaction } = useMutation('transactions', 'update');
+
+  var scrollBottomPadding = Platform.OS === 'web' ? WEB_TAB_MENU_PADDING : (TAB_MENU_HEIGHT + insets.bottom + SCROLL_EXTRA_PADDING);
+  var list = transactions && transactions.length > 0 ? transactions : [];
+
+  var pendingPayments = list.filter(function(t) { return t.transaction_status !== 'completed'; });
+  var completedPayments = list.filter(function(t) { return t.transaction_status === 'completed'; });
+
+  return React.createElement(View, { style: { flex: 1, backgroundColor: theme.colors.background } },
+    React.createElement(StatusBar, { backgroundColor: PRIMARY_COLOR, barStyle: 'light-content' }),
+    React.createElement(View, { style: { backgroundColor: PRIMARY_COLOR, paddingTop: insets.top + 12, paddingBottom: 14, paddingHorizontal: 20 } },
+      React.createElement(Text, { style: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' } }, 'Payments')
+    ),
+    loading ? React.createElement(ActivityIndicator, { style: { flex: 1 }, componentId: 'payment-loading' }) :
+    React.createElement(ScrollView, { contentContainerStyle: { padding: 16, paddingBottom: scrollBottomPadding } },
+      pendingPayments.length > 0 ? React.createElement(View, null,
+        React.createElement(Text, { style: { fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 10 } }, 'Pending Payments (' + pendingPayments.length + ')'),
+        pendingPayments.map(function(t) {
+          var refNumber = 'KSN-' + t.id.substring(0, 8).toUpperCase();
+          return React.createElement(View, { key: t.id, style: [styles.card, { marginBottom: 12, borderLeftWidth: 4, borderLeftColor: ACCENT_COLOR }] },
+            React.createElement(View, { style: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' } },
+              React.createElement(View, { style: { flex: 1 } },
+                React.createElement(Text, { style: { fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary } }, '₹' + (t.payment_amount || '2500')),
+                React.createElement(Text, { style: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 4 } }, 'Ref: ' + refNumber),
+                React.createElement(Text, { style: { fontSize: 11, color: theme.colors.textSecondary, marginTop: 2 } }, 'Quantity: ' + t.quantity_tonnes + ' tonnes')
+              ),
+              React.createElement(View, { style: { backgroundColor: ACCENT_COLOR + '33', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 } },
+                React.createElement(Text, { style: { fontSize: 11, fontWeight: '700', color: '#92600A' } }, 'PENDING')
+              )
+            ),
+            React.createElement(View, { style: { backgroundColor: '#FEF3E2', borderRadius: 10, padding: 12, marginTop: 12 } },
+              React.createElement(Text, { style: { fontSize: 12, fontWeight: '700', color: '#92600A', marginBottom: 8 } }, 'Bank Transfer Details'),
+              React.createElement(Text, { style: { fontSize: 11, color: '#6B4E00', marginBottom: 4 } }, 'Account: ' + BANK_DETAILS.accountNumber),
+              React.createElement(Text, { style: { fontSize: 11, color: '#6B4E00', marginBottom: 4 } }, 'Bank: ' + BANK_DETAILS.bankName),
+              React.createElement(Text, { style: { fontSize: 11, color: '#6B4E00', marginBottom: 4 } }, 'IFSC: ' + BANK_DETAILS.ifscCode),
+              React.createElement(Text, { style: { fontSize: 11, color: '#6B4E00' } }, 'Reference: ' + refNumber)
+            ),
+            React.createElement(TouchableOpacity, {
+              style: { backgroundColor: PRIMARY_COLOR, borderRadius: 8, padding: 10, alignItems: 'center', marginTop: 12 },
+              onPress: function() { updateTransaction({ id: t.id, data: { transaction_status: 'completed', completed_at: new Date().toISOString() } }).then(refetch).catch(function() {}); },
+              componentId: 'confirm-payment-' + t.id
+            },
+              React.createElement(Text, { style: { color: '#FFFFFF', fontWeight: '700', fontSize: 12 } }, 'CONFIRM PAYMENT SENT')
+            )
+          );
+        })
+      ) : React.createElement(View, { style: { alignItems: 'center', paddingVertical: 24 } },
+        React.createElement(Ionicons, { name: 'checkmark-circle', size: 40, color: '#16A34A' }),
+        React.createElement(Text, { style: { color: theme.colors.textSecondary, marginTop: 8 } }, 'No pending payments')
+      ),
+      completedPayments.length > 0 ? React.createElement(View, { style: { marginTop: 20 } },
+        React.createElement(Text, { style: { fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 10 } }, 'Payment History (' + completedPayments.length + ')'),
+        completedPayments.map(function(t) {
+          var refNumber = 'KSN-' + t.id.substring(0, 8).toUpperCase();
+          var completedDate = t.completed_at ? new Date(t.completed_at).toLocaleDateString() : 'N/A';
+          return React.createElement(View, { key: t.id, style: [styles.card, { marginBottom: 10, opacity: 0.8, borderLeftWidth: 4, borderLeftColor: '#16A34A' }] },
+            React.createElement(View, { style: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' } },
+              React.createElement(View, { style: { flex: 1 } },
+                React.createElement(Text, { style: { fontSize: 13, fontWeight: '700', color: theme.colors.textPrimary } }, '₹' + (t.payment_amount || '2500')),
+                React.createElement(Text, { style: { fontSize: 11, color: theme.colors.textSecondary, marginTop: 2 } }, completedDate + ' · ' + refNumber)
+              ),
+              React.createElement(View, { style: { backgroundColor: '#D1F3D8', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 } },
+                React.createElement(Text, { style: { fontSize: 11, fontWeight: '700', color: '#166534' } }, 'COMPLETED')
+              )
+            )
+          );
+        })
+      ) : null
+    )
+  );
+};
+// @end:PaymentScreen
+
 // @section:NotificationsScreen @depends:[ThemeContext,styles]
 var NotificationsScreen = function(props) {
   var themeCtx = useTheme();
@@ -1160,7 +1244,7 @@ var KisanAIScreen = function(props) {
 };
 // @end:KisanAIScreen
 
-// @section:FarmerTabNavigator @depends:[FarmerDashboardScreen,BookAppointmentScreen,TrackTokenScreen,NotificationsScreen,KisanAIScreen]
+// @section:FarmerTabNavigator @depends:[FarmerDashboardScreen,BookAppointmentScreen,TrackTokenScreen,PaymentScreen,NotificationsScreen,KisanAIScreen]
 var FarmerTabNavigator = function() {
   var insets = useSafeAreaInsets();
   return React.createElement(Tab.Navigator, {
@@ -1173,7 +1257,7 @@ var FarmerTabNavigator = function() {
         tabBarInactiveTintColor: TEXT_SECONDARY,
         tabBarStyle: { position: 'absolute', bottom: 0, height: Platform.OS === 'web' ? TAB_MENU_HEIGHT : TAB_MENU_HEIGHT + insets.bottom, paddingBottom: 0, borderTopWidth: 0, backgroundColor: '#FFFFFF' },
         tabBarIcon: function(iconProps) {
-          var iconMap = { Dashboard: 'home', Book: 'add-circle', Track: 'locate', Notifications: 'notifications', Assistant: 'chatbubble-ellipses' };
+          var iconMap = { Dashboard: 'home', Book: 'add-circle', Track: 'locate', Payments: 'card', Notifications: 'notifications', Assistant: 'chatbubble-ellipses' };
           return React.createElement(Ionicons, { name: iconMap[routeName] || 'ellipse', size: 22, color: iconProps.color });
         }
       };
@@ -1182,6 +1266,7 @@ var FarmerTabNavigator = function() {
     React.createElement(Tab.Screen, { name: 'Dashboard', component: FarmerDashboardScreen }),
     React.createElement(Tab.Screen, { name: 'Book', component: BookAppointmentScreen }),
     React.createElement(Tab.Screen, { name: 'Track', component: TrackTokenScreen }),
+    React.createElement(Tab.Screen, { name: 'Payments', component: PaymentScreen }),
     React.createElement(Tab.Screen, { name: 'Notifications', component: NotificationsScreen }),
     React.createElement(Tab.Screen, { name: 'Assistant', component: KisanAIScreen })
   );
